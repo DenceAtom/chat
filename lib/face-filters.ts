@@ -91,7 +91,7 @@ export class FaceFilterManager {
   private faceExpressions: faceapi.FaceExpressions | null = null
   private eyeOpenness: { left: number; right: number } = { left: 0, right: 0 }
   private mouthOpenness = 0
-  private headPose: { pitch: number; yaw: number; roll: number } = { pitch: 0, yaw: 0, roll: number }
+  private headPose: { pitch: number; yaw: number; roll: number } = { pitch: 0, yaw: 0, roll: 0 }
   private blinkDetection: { left: boolean; right: boolean } = { left: false, right: false }
   private smileDetection = false
   private frownDetection = false
@@ -415,12 +415,12 @@ export class FaceFilterManager {
     const now = performance.now()
 
     // Detect blinks
-    const blinkThreshold = 0.3
-    const leftEyeRatio = this.eyeOpenness.left / (this.eyeOpenness.left + this.eyeOpenness.right)
-    const rightEyeRatio = this.eyeOpenness.right / (this.eyeOpenness.left + this.eyeOpenness.right)
+    const blinkThreshold: number = 0.3
+    const leftEyeRatio: number = this.eyeOpenness.left / (this.eyeOpenness.left + this.eyeOpenness.right)
+    const rightEyeRatio: number = this.eyeOpenness.right / (this.eyeOpenness.left + this.eyeOpenness.right)
 
-    const leftBlinking = leftEyeRatio < blinkThreshold
-    const rightBlinking = rightEyeRatio < blinkThreshold
+    const leftBlinking: boolean = leftEyeRatio < blinkThreshold
+    const rightBlinking: boolean = rightEyeRatio < blinkThreshold
 
     // Count blinks
     if (leftBlinking && !this.blinkDetection.left) {
@@ -436,8 +436,8 @@ export class FaceFilterManager {
     this.blinkDetection = { left: leftBlinking, right: rightBlinking }
 
     // Detect smile
-    const smileThreshold = 0.7
-    const isSmiling = this.faceExpressions.happy > smileThreshold
+    const smileThreshold: number = 0.7
+    const isSmiling: boolean = this.faceExpressions.happy > smileThreshold
 
     // Count smiles
     if (isSmiling && !this.smileDetection) {
@@ -457,7 +457,7 @@ export class FaceFilterManager {
     if (now - this.lastExpressionTime > 1000) {
       // Update every second
       let currentExpression = "neutral"
-      let maxScore = this.faceExpressions.neutral
+      let maxScore: number = this.faceExpressions.neutral
 
       if (this.faceExpressions.happy > maxScore) {
         currentExpression = "happy"
@@ -501,7 +501,7 @@ export class FaceFilterManager {
   // Update animation phase for animated filters
   private updateAnimationPhase(): void {
     const now = performance.now()
-    const deltaTime = now - this.filterLastUpdateTime
+    const deltaTime: number = now - this.filterLastUpdateTime
 
     // Update animation phase based on speed
     this.filterAnimationPhase += deltaTime * 0.001 * this.filterSpeed
@@ -592,15 +592,15 @@ export class FaceFilterManager {
     const mouth = positions[57]
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.5 * this.filterScale
 
     // Draw dog filter (ears, nose, etc.)
     this.ctx.save()
 
     // Position at center of face, slightly above
-    const centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
-    const centerY = leftEye.y - faceWidth * 0.3 + this.filterOffset.y
+    const centerX: number = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
+    const centerY: number = leftEye.y - faceWidth * 0.3 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.filterRotation + this.headPose.roll)
@@ -618,7 +618,7 @@ export class FaceFilterManager {
       const tongueY = mouth.y + 10
 
       // Make tongue move up and down
-      const tongueOffset = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 5
+      const tongueOffset: number = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 5
 
       this.ctx.translate(tongueX, tongueY)
       this.ctx.beginPath()
@@ -641,15 +641,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.5 * this.filterScale
 
     // Draw cat filter
     this.ctx.save()
 
     // Position at center of face, slightly above
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.2 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.2 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.filterRotation + this.headPose.roll)
@@ -664,14 +664,14 @@ export class FaceFilterManager {
 
     const noseX = positions[30].x
     const noseY = positions[30].y
-    const whiskerLength = faceWidth * 0.2
+    const whiskerLength: number = faceWidth * 0.2
 
     // Whisker movement based on smile
-    const whiskerAngleOffset = this.smileDetection ? 0.2 : 0
+    const whiskerAngleOffset: number = this.smileDetection ? 0.2 : 0
 
     // Left whiskers
     for (let i = 0; i < 3; i++) {
-      const angle = Math.PI * 0.75 - i * 0.15 + whiskerAngleOffset
+      const angle: number = Math.PI * 0.75 - i * 0.15 + whiskerAngleOffset
       const startX = noseX - 5
       const startY = noseY + i * 3
       const endX = startX - Math.cos(angle) * whiskerLength
@@ -687,7 +687,7 @@ export class FaceFilterManager {
 
     // Right whiskers
     for (let i = 0; i < 3; i++) {
-      const angle = Math.PI * 0.25 + i * 0.15 - whiskerAngleOffset
+      const angle: number = Math.PI * 0.25 + i * 0.15 - whiskerAngleOffset
       const startX = noseX + 5
       const startY = noseY + i * 3
       const endX = startX + Math.cos(angle) * whiskerLength
@@ -714,15 +714,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.8 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.8 * this.filterScale
 
     // Draw bunny filter
     this.ctx.save()
 
     // Position at top of head
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.filterRotation + this.headPose.roll)
@@ -739,7 +739,7 @@ export class FaceFilterManager {
     const noseY = positions[30].y
 
     // Make nose twitch
-    const twitchOffset = Math.sin(this.filterAnimationPhase * Math.PI * 10) * 2
+    const twitchOffset: number = Math.sin(this.filterAnimationPhase * Math.PI * 10) * 2
 
     this.ctx.translate(noseX + twitchOffset, noseY)
     this.ctx.beginPath()
@@ -764,18 +764,18 @@ export class FaceFilterManager {
     const rightEye = positions[45]
 
     // Calculate angle between eyes
-    const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
+    const angle: number = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
 
     // Calculate distance between eyes and scale
-    const eyeDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2))
-    const scale = (eyeDistance / (img.width * 0.5)) * this.filterScale
+    const eyeDistance: number = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2))
+    const scale: number = (eyeDistance / (img.width * 0.5)) * this.filterScale
 
     // Draw glasses
     this.ctx.save()
 
     // Position at center between eyes
-    const centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
-    const centerY = (leftEye.y + rightEye.y) / 2 + this.filterOffset.y
+    const centerX: number = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
+    const centerY: number = (leftEye.y + rightEye.y) / 2 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(angle + this.filterRotation)
@@ -796,15 +796,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.2 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.2 * this.filterScale
 
     // Draw hat
     this.ctx.save()
 
     // Position at top of head
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.6 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.6 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.headPose.roll + this.filterRotation)
@@ -825,15 +825,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.2 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.2 * this.filterScale
 
     // Draw crown
     this.ctx.save()
 
     // Position at top of head
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.7 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.7 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.headPose.roll + this.filterRotation)
@@ -848,12 +848,12 @@ export class FaceFilterManager {
 
     // Generate sparkles
     for (let i = 0; i < 5; i++) {
-      const sparkleX = centerX + (Math.random() - 0.5) * faceWidth * 0.8
-      const sparkleY = centerY + (Math.random() - 0.5) * faceWidth * 0.3
-      const sparkleSize = 2 + Math.random() * 4
+      const sparkleX: number = centerX + (Math.random() - 0.5) * faceWidth * 0.8
+      const sparkleY: number = centerY + (Math.random() - 0.5) * faceWidth * 0.3
+      const sparkleSize: number = 2 + Math.random() * 4
 
       // Sparkle animation
-      const sparkleOpacity = Math.sin((this.filterAnimationPhase + i * 0.2) * Math.PI * 2) * 0.5 + 0.5
+      const sparkleOpacity: number = Math.sin((this.filterAnimationPhase + i * 0.2) * Math.PI * 2) * 0.5 + 0.5
 
       // Draw sparkle
       this.ctx.beginPath()
@@ -879,12 +879,12 @@ export class FaceFilterManager {
     const mouth = positions[57]
 
     // Calculate position between nose and mouth
-    const centerX = nose.x + this.filterOffset.x
-    const centerY = nose.y + (mouth.y - nose.y) * 0.4 + this.filterOffset.y
+    const centerX: number = nose.x + this.filterOffset.x
+    const centerY: number = nose.y + (mouth.y - nose.y) * 0.4 + this.filterOffset.y
 
     // Calculate scale based on face width
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 0.6 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 0.6 * this.filterScale
 
     // Draw mustache
     this.ctx.save()
@@ -906,15 +906,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.8 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.8 * this.filterScale
 
     // Draw alien filter
     this.ctx.save()
 
     // Position at center of face, slightly above
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.3 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.3 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.headPose.roll + this.filterRotation)
@@ -933,8 +933,8 @@ export class FaceFilterManager {
     const rightEyeY = positions[44].y
 
     // Pulsating glow
-    const glowIntensity = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 0.3 + 0.7
-    const glowSize = 5 + glowIntensity * 5
+    const glowIntensity: number = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 0.3 + 0.7
+    const glowSize: number = 5 + glowIntensity * 5
 
     // Create radial gradient for glow
     const leftGlow = this.ctx.createRadialGradient(leftEyeX, leftEyeY, 0, leftEyeX, leftEyeY, glowSize)
@@ -969,15 +969,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.5 * this.filterScale
 
     // Draw zombie filter
     this.ctx.save()
 
     // Position at center of face
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = (positions[36].y + positions[57].y) / 2 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = (positions[36].y + positions[57].y) / 2 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.headPose.roll + this.filterRotation)
@@ -1002,8 +1002,8 @@ export class FaceFilterManager {
     const rightEye = positions[44]
 
     // Calculate scale based on face width
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 0.5 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 0.5 * this.filterScale
 
     // Draw hearts over eyes
     this.ctx.save()
@@ -1036,15 +1036,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
-    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+    const faceWidth: number = box.width
+    const scale: number = (faceWidth / img.width) * 1.5 * this.filterScale
 
     // Draw fire on top of head
     this.ctx.save()
 
     // Position at top of head
-    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
-    const centerY = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
+    const centerX: number = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY: number = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.headPose.roll + this.filterRotation)
@@ -1062,15 +1062,15 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face width and position
-    const faceWidth = box.width
+    const faceWidth: number = box.width
 
     // Draw rainbow arc above head
     this.ctx.save()
 
-    const headCenterX = (positions[36].x + positions[45].x) / 2
-    const headTopY = positions[24].y - faceWidth * 0.3
-    const rainbowWidth = faceWidth * 1.5
-    const rainbowHeight = faceWidth * 0.8
+    const headCenterX: number = (positions[36].x + positions[45].x) / 2
+    const headTopY: number = positions[24].y - faceWidth * 0.3
+    const rainbowWidth: number = faceWidth * 1.5
+    const rainbowHeight: number = faceWidth * 0.8
 
     // Rainbow colors
     const colors = [
@@ -1085,9 +1085,9 @@ export class FaceFilterManager {
 
     // Draw rainbow arcs
     for (let i = 0; i < colors.length; i++) {
-      const arcWidth = rainbowWidth * (1 - i * 0.1)
-      const arcHeight = rainbowHeight * (1 - i * 0.1)
-      const lineWidth = faceWidth * 0.05
+      const arcWidth: number = rainbowWidth * (1 - i * 0.1)
+      const arcHeight: number = rainbowHeight * (1 - i * 0.1)
+      const lineWidth: number = faceWidth * 0.05
 
       this.ctx.beginPath()
       this.ctx.ellipse(
@@ -1115,10 +1115,10 @@ export class FaceFilterManager {
     const positions = landmarks.positions
 
     // Calculate face dimensions
-    const faceWidth = box.width
-    const faceHeight = box.height
-    const faceLeft = box.x
-    const faceTop = box.y
+    const faceWidth: number = box.width
+    const faceHeight: number = box.height
+    const faceLeft: number = box.x
+    const faceTop: number = box.y
 
     // Draw glitter particles around the face
     this.ctx.save()
@@ -1126,20 +1126,21 @@ export class FaceFilterManager {
     // Create glitter particles
     for (let i = 0; i < 50; i++) {
       // Calculate particle position
-      const particlePhase = (this.filterAnimationPhase + i * 0.02) % 1
-      const particleX = faceLeft + Math.random() * faceWidth
-      const particleY = faceTop + Math.random() * faceHeight
+      const particlePhase: number = (this.filterAnimationPhase + i * 0.02) % 1
+      const particleX: number = faceLeft + Math.random() * faceWidth
+      const particleY: number = faceTop + Math.random() * faceHeight
 
       // Calculate particle size and opacity with animation
-      const particleSize = faceWidth * 0.01 * (0.5 + Math.sin(this.filterAnimationPhase * Math.PI * 10 + i) * 0.5)
-      const particleOpacity = 0.5 + Math.sin(this.filterAnimationPhase * Math.PI * 8 + i) * 0.5
+      const particleSize: number =
+        faceWidth * 0.01 * (0.5 + Math.sin(this.filterAnimationPhase * Math.PI * 10 + i) * 0.5)
+      const particleOpacity: number = 0.5 + Math.sin(this.filterAnimationPhase * Math.PI * 8 + i) * 0.5
 
       // Draw glitter particle
       this.ctx.beginPath()
       this.ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2)
 
       // Random glitter colors
-      const hue = Math.floor(Math.random() * 360)
+      const hue: number = Math.floor(Math.random() * 360)
       this.ctx.fillStyle = `hsla(${hue}, 100%, 75%, ${particleOpacity * this.filterOpacity})`
       this.ctx.fill()
     }
@@ -1169,8 +1170,8 @@ export class FaceFilterManager {
 
     // Neon glow effect
     const glowColor = this.filterColor || "#00ffff"
-    const glowWidth = box.width * 0.01
-    const glowIntensity = 0.7 + Math.sin(this.filterAnimationPhase * Math.PI * 2) * 0.3
+    const glowWidth: number = box.width * 0.01
+    const glowIntensity: number = 0.7 + Math.sin(this.filterAnimationPhase * Math.PI * 2) * 0.3
 
     // Draw neon outline
     this.ctx.beginPath()
@@ -1199,10 +1200,10 @@ export class FaceFilterManager {
     if (!this.ctx || !this.canvas || !this.video) return
 
     // Get face region
-    const faceLeft = Math.max(0, box.x)
-    const faceTop = Math.max(0, box.y)
-    const faceWidth = Math.min(this.canvas.width - faceLeft, box.width)
-    const faceHeight = Math.min(this.canvas.height - faceTop, box.height)
+    const faceLeft: number = Math.max(0, box.x)
+    const faceTop: number = Math.max(0, box.y)
+    const faceWidth: number = Math.min(this.canvas.width - faceLeft, box.width)
+    const faceHeight: number = Math.min(this.canvas.height - faceTop, box.height)
 
     // Skip if face is out of bounds
     if (faceWidth <= 0 || faceHeight <= 0) return
@@ -1211,21 +1212,21 @@ export class FaceFilterManager {
     const faceImageData = this.ctx.getImageData(faceLeft, faceTop, faceWidth, faceHeight)
 
     // Pixelation size (larger = more pixelated)
-    const pixelSize = Math.max(2, Math.floor(faceWidth * 0.05 * this.filterIntensity))
+    const pixelSize: number = Math.max(2, Math.floor(faceWidth * 0.05 * this.filterIntensity))
 
     // Pixelate the face region
     for (let y = 0; y < faceHeight; y += pixelSize) {
       for (let x = 0; x < faceWidth; x += pixelSize) {
         // Get the color of the first pixel in the block
-        const pixelIndex = (y * faceWidth + x) * 4
-        const r = faceImageData.data[pixelIndex]
-        const g = faceImageData.data[pixelIndex + 1]
-        const b = faceImageData.data[pixelIndex + 2]
+        const pixelIndex: number = (y * faceWidth + x) * 4
+        const r: number = faceImageData.data[pixelIndex]
+        const g: number = faceImageData.data[pixelIndex + 1]
+        const b: number = faceImageData.data[pixelIndex + 2]
 
         // Fill the entire block with this color
         for (let blockY = 0; blockY < pixelSize && y + blockY < faceHeight; blockY++) {
           for (let blockX = 0; blockX < pixelSize && x + blockX < faceWidth; blockX++) {
-            const blockIndex = ((y + blockY) * faceWidth + (x + blockX)) * 4
+            const blockIndex: number = ((y + blockY) * faceWidth + (x + blockX)) * 4
             faceImageData.data[blockIndex] = r
             faceImageData.data[blockIndex + 1] = g
             faceImageData.data[blockIndex + 2] = b

@@ -21,14 +21,15 @@ export async function getAdminByEmail(email: string): Promise<Admin | null> {
 
 // Verify admin credentials
 export async function verifyAdminCredentials(email: string, password: string): Promise<Admin | null> {
-  const admin = await getAdminByEmail(email)
+  const { db } = await connectToDatabase()
+  const admin = (await db.collection("admins").findOne({ email })) as Admin
+
   if (!admin) return null
 
   const isValid = await bcrypt.compare(password, admin.passwordHash)
   if (!isValid) return null
 
   // Update last login
-  const { db } = await connectToDatabase()
   await db.collection("admins").updateOne({ _id: new ObjectId(admin._id) }, { $set: { lastLogin: new Date() } })
 
   return admin
@@ -72,8 +73,8 @@ export async function getOnlineUsers() {
   return db
     .collection("users")
     .find({
-      isOnline: true,
-      lastActive: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // Active in last 5 minutes
+      connected: true,
+      lastSeen: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // Active in last 5 minutes
     })
     .toArray()
 }

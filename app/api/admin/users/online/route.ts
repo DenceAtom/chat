@@ -1,12 +1,19 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getAllOnlineUsers } from "@/lib/services/adminService"
-import { verifyAdminToken } from "@/lib/middleware/adminAuth"
+import { verifyAdminToken } from "@/lib/services/adminService"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    // Verify admin token
-    const adminData = await verifyAdminToken(request)
-    if (!adminData) {
+    // Get token from authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const token = authHeader.split(" ")[1]
+    const admin = verifyAdminToken(token)
+
+    if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -15,7 +22,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ users: onlineUsers })
   } catch (error) {
     console.error("Error fetching online users:", error)
-    return NextResponse.json({ error: "Failed to fetch online users" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
