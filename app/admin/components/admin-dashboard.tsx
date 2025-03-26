@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -24,7 +25,7 @@ export default function AdminDashboard() {
         }
 
         // Fetch online users
-        const onlineUsersRes = await fetch("/api/admin/users/online", {
+        const onlineUsersRes = await fetch("/api/admin/users?status=online", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -36,24 +37,27 @@ export default function AdminDashboard() {
 
         const onlineUsersData = await onlineUsersRes.json()
 
-        // Fetch active chats
-        const activeChatsRes = await fetch("/api/admin/chats/active", {
+        // Fetch all users
+        const allUsersRes = await fetch("/api/admin/users", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
 
-        if (!activeChatsRes.ok) {
-          throw new Error("Failed to fetch active chats")
+        if (!allUsersRes.ok) {
+          throw new Error("Failed to fetch all users")
         }
 
-        const activeChatsData = await activeChatsRes.json()
+        const allUsersData = await allUsersRes.json()
+
+        // Count banned users
+        const bannedUsers = allUsersData.users.filter((user: any) => user.isBanned).length
 
         setStats({
-          totalUsers: 0, // This would come from a separate API call
+          totalUsers: allUsersData.users.length,
           onlineUsers: onlineUsersData.users.length,
-          activeChats: activeChatsData.chats.length,
-          bannedUsers: 0, // This would come from a separate API call
+          activeChats: 0, // This would come from a separate API call
+          bannedUsers,
         })
       } catch (err: any) {
         setError(err.message || "Failed to load dashboard data")
@@ -64,11 +68,6 @@ export default function AdminDashboard() {
     }
 
     fetchDashboardData()
-
-    // Set up polling for real-time updates
-    const interval = setInterval(fetchDashboardData, 30000) // Update every 30 seconds
-
-    return () => clearInterval(interval)
   }, [router])
 
   if (isLoading) {
@@ -101,18 +100,16 @@ export default function AdminDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
           <div className="space-y-4">
-            <button
-              onClick={() => router.push("/admin/monitoring")}
-              className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors"
-            >
-              Monitor Live Chats
-            </button>
-            <button
-              onClick={() => router.push("/admin/users")}
-              className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors"
-            >
-              Manage Users
-            </button>
+            <Link href="/admin/users">
+              <button className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors">
+                Manage Users
+              </button>
+            </Link>
+            <Link href="/admin/monitoring">
+              <button className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors">
+                Monitor Live Chats
+              </button>
+            </Link>
           </div>
         </div>
 

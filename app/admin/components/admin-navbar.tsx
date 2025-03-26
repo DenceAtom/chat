@@ -14,7 +14,7 @@ export default function AdminNavbar() {
     const token = localStorage.getItem("adminToken")
     setIsLoggedIn(!!token)
 
-    // Redirect to login if not logged in and not already on login page
+    // Redirect to login if not logged in
     if (!token && pathname !== "/admin/login") {
       router.push("/admin/login")
     }
@@ -23,15 +23,12 @@ export default function AdminNavbar() {
   const handleLogout = () => {
     localStorage.removeItem("adminToken")
     localStorage.removeItem("adminData")
+    document.cookie = "admin_auth=; path=/; max-age=0"
     setIsLoggedIn(false)
     router.push("/admin/login")
   }
 
-  if (!isLoggedIn && pathname !== "/admin/login") {
-    return null
-  }
-
-  if (pathname === "/admin/login") {
+  if (!isLoggedIn) {
     return null
   }
 

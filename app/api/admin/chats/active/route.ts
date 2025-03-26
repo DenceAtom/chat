@@ -1,36 +1,21 @@
-import { NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/mongodb"
+import { type NextRequest, NextResponse } from "next/server"
+import { getActiveChats } from "@/lib/services/adminService"
+import { verifyAdminToken } from "@/lib/middleware/adminAuth"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Check if MongoDB URI is available
-    if (!process.env.MONGODB_URI) {
-      console.warn("MONGODB_URI environment variable is not set")
-      return NextResponse.json(
-        {
-          error: "Database connection not configured",
-          activeChatCount: 0,
-        },
-        { status: 503 },
-      )
+    // Verify admin token
+    const adminData = await verifyAdminToken(request)
+    if (!adminData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const db = await connectToDatabase()
-    const chatsCollection = db.collection("chats")
+    const activeChats = await getActiveChats()
 
-    // Find active chats (those with an active status)
-    const activeChatCount = await chatsCollection.countDocuments({ status: "active" })
-
-    return NextResponse.json({ activeChatCount })
+    return NextResponse.json({ chats: activeChats })
   } catch (error) {
     console.error("Error fetching active chats:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to fetch active chats",
-        activeChatCount: 0,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to fetch active chats" }, { status: 500 })
   }
 }
 

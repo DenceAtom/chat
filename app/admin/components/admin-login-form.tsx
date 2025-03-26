@@ -18,7 +18,7 @@ export default function AdminLoginForm() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/admin/auth", {
+      const response = await fetch("/api/admin/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -36,10 +36,13 @@ export default function AdminLoginForm() {
       localStorage.setItem("adminToken", data.token)
       localStorage.setItem("adminData", JSON.stringify(data.admin))
 
+      // Set cookie for server-side auth check
+      document.cookie = `admin_auth=authenticated; path=/; max-age=${60 * 60 * 24}` // 24 hours
+
       // Redirect to admin dashboard
       router.push("/admin")
     } catch (err: any) {
-      setError(err.message || "Failed to login")
+      setError(err.message)
     } finally {
       setIsLoading(false)
     }
@@ -47,7 +50,11 @@ export default function AdminLoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {error && <div className="p-4 text-red-700 bg-red-100 rounded-md">{error}</div>}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
 
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -57,6 +64,7 @@ export default function AdminLoginForm() {
           id="email"
           name="email"
           type="email"
+          autoComplete="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -72,6 +80,7 @@ export default function AdminLoginForm() {
           id="password"
           name="password"
           type="password"
+          autoComplete="current-password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}

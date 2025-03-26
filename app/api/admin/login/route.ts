@@ -1,21 +1,53 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { sign } from "jsonwebtoken"
+import { connectToDatabase } from "@/lib/mongodb"
+import bcrypt from "bcryptjs"
 
-// In a real application, you would use a database and proper authentication
-// This is a simplified example with hardcoded credentials
-const ADMIN_USERNAME = "admin"
-const ADMIN_PASSWORD = "admin123" // Use a strong password in production
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { username, password } = await req.json()
 
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      return NextResponse.json({ success: true })
-    } else {
-      return NextResponse.json({ success: false, message: "Invalid credentials" }, { status: 401 })
+    if (!username || !password) {
+      return NextResponse.json({ error: "Username and password are required" }, { status: 400 })
     }
+
+    const { db } = await connectToDatabase()
+    const admin = await db.collection("admins").findOne({ username })
+
+    if (!admin) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, admin.password)
+
+    if (!isPasswordValid) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Create JWT token
+    const token = sign(
+      {
+        id: admin._id.toString(),
+        username: admin.username,
+        role: "admin",
+      },
+      JWT_SECRET,
+      { expiresIn: "8h" },
+    )
+
+    return NextResponse.json({
+      success: true,
+      token,
+      admin: {
+        id: admin._id.toString(),
+        username: admin.username,
+      },
+    })
   } catch (error) {
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 })
+    console.error("Admin login error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

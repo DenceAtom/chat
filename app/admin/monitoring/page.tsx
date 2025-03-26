@@ -1,17 +1,11 @@
-import type { Metadata } from "next"
-import LiveMonitoring from "../components/live-monitoring"
+import LiveMonitoring from "../components/LiveMonitoring"
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Live Monitoring - Admin Dashboard",
-  description: "Monitor live chats in Random Video Chat",
+  description: "Monitor live video chat sessions",
 }
 
-export default function MonitoringPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Live Monitoring</h1>
-      <LiveMonitoring />
-    </div>
-  )
+export default function LiveMonitoringPage() {
+  return <LiveMonitoring />
 }
 

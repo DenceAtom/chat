@@ -1,54 +1,40 @@
-import { NextResponse } from "next/server"
-import databaseService from "@/lib/database-service"
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
+import { getOnlineUsers, verifyAdminToken } from "@/lib/services/adminService"
+import { connectToDatabase } from "@/lib/mongodb"
 
-// Check admin authentication
-function isAuthenticated() {
-  const cookieStore = cookies()
-  return cookieStore.get("admin_auth")?.value === "authenticated"
-}
-
-export async function GET(req: Request) {
-  if (!isAuthenticated()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { searchParams } = new URL(req.url)
-  const filter = searchParams.get("filter")
-
-  console.log(`API: Fetching users with filter: ${filter}`)
-
-  let users = []
+export async function GET(request: NextRequest) {
   try {
-    switch (filter) {
-      case "active":
-        users = await databaseService.getActiveUsers()
-        break
-      case "banned":
-        users = await databaseService.getBannedUsers()
-        break
-      case "quarantined":
-        users = await databaseService.getQuarantinedUsers()
-        break
-      default:
-        users = await databaseService.getAllUsers()
+    // Get token from Authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Log the users for debugging
-    console.log(`API: Fetched ${users.length} users with filter: ${filter}`)
+    const token = authHeader.split(" ")[1]
+    const adminData = verifyAdminToken(token)
 
-    // For active users, log their IDs
-    if (filter === "active") {
-      console.log(
-        "Active user IDs:",
-        users.map((u) => u.id),
-      )
+    if (!adminData) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    // Get query parameters
+    const url = new URL(request.url)
+    const status = url.searchParams.get("status")
+
+    let users
+
+    if (status === "online") {
+      users = await getOnlineUsers()
+    } else {
+      // Get all users with pagination
+      const { db } = await connectToDatabase()
+      users = await db.collection("users").find({}).limit(100).toArray()
     }
 
     return NextResponse.json({ users })
   } catch (error) {
-    console.error(`Error fetching users with filter ${filter}:`, error)
-    return NextResponse.json({ error: "Failed to fetch users", users: [] }, { status: 500 })
+    console.error("Error fetching users:", error)
+    return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
   }
 }
 

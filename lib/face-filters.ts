@@ -1,7 +1,5 @@
 import * as faceapi from "face-api.js"
-
-// Check if we're in a browser environment
-const isBrowser = typeof window !== "undefined"
+import * as tf from "@tensorflow/tfjs"
 
 // Define the filter types
 export type FilterType =
@@ -86,14 +84,14 @@ export class FaceFilterManager {
   private isProcessing = false
   private detectionInterval = 100 // ms between detections
   private lastDetectionTime = 0
-  private detections: any[] = []
+  private detections: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }, faceapi.FaceLandmarks68>[] = []
 
   // Advanced tracking properties
   private faceMeshPoints: number[][] = []
-  private faceExpressions: any | null = null
+  private faceExpressions: faceapi.FaceExpressions | null = null
   private eyeOpenness: { left: number; right: number } = { left: 0, right: 0 }
   private mouthOpenness = 0
-  private headPose: { pitch: number; yaw: number; roll: number } = { pitch: 0, yaw: 0, roll: 0 }
+  private headPose: { pitch: number; yaw: number; roll: number } = { pitch: 0, yaw: 0, roll: number }
   private blinkDetection: { left: boolean; right: boolean } = { left: false, right: false }
   private smileDetection = false
   private frownDetection = false
@@ -142,16 +140,13 @@ export class FaceFilterManager {
   private averageProcessingTime = 0
 
   constructor() {
-    if (isBrowser) {
-      this.initPerformanceMonitoring()
-      // Don't try to load filter images immediately - we'll do it on demand
-    }
+    this.loadFilterImages()
+    this.initPerformanceMonitoring()
   }
 
   // Load the face detection models with advanced capabilities
   async loadModels(): Promise<void> {
-    if (!isBrowser) return Promise.resolve()
-    if (this.isModelLoaded) return Promise.resolve()
+    if (this.isModelLoaded) return
 
     try {
       // Load models from public directory with extended capabilities
@@ -161,17 +156,54 @@ export class FaceFilterManager {
       await faceapi.nets.faceExpressionNet.loadFromUri("/models")
 
       // Initialize TensorFlow.js
-      if (typeof window !== "undefined") {
-        const tf = await import("@tensorflow/tfjs")
-        await tf.ready()
-      }
+      await tf.ready()
 
       console.log("Face detection models loaded successfully with advanced capabilities")
       this.isModelLoaded = true
-      return Promise.resolve()
     } catch (error) {
       console.error("Error loading face detection models:", error)
-      return Promise.reject(new Error("Failed to load face detection models"))
+      throw new Error("Failed to load face detection models")
+    }
+  }
+
+  // Preload filter images with extended collection
+  private loadFilterImages(): void {
+    const filters = ["dog", "cat", "bunny", "glasses", "hat", "crown", "mustache", "alien", "zombie", "heart", "fire"]
+
+    filters.forEach((filter) => {
+      const img = new Image()
+      img.src = `/filters/${filter}.png`
+      img.crossOrigin = "anonymous"
+      this.filterImages[filter] = img
+
+      // Log when image is loaded
+      img.onload = () => console.log(`Loaded filter image: ${filter}`)
+      img.onerror = () => console.error(`Failed to load filter image: ${filter}`)
+    })
+  }
+
+  // Initialize with video and canvas elements
+  initialize(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+    this.video = video
+    this.canvas = canvas
+    this.ctx = canvas.getContext("2d")
+
+    // Set canvas dimensions to match video
+    this.updateCanvasDimensions()
+
+    console.log("Face filter manager initialized with advanced capabilities")
+  }
+
+  // Update canvas dimensions to match video
+  updateCanvasDimensions(): void {
+    if (!this.video || !this.canvas) return
+
+    const { videoWidth, videoHeight } = this.video
+
+    if (videoWidth && videoHeight) {
+      this.canvas.width = videoWidth
+      this.canvas.height = videoHeight
+      console.log(`Canvas dimensions set to ${videoWidth}x${videoHeight}`)
     }
   }
 
@@ -189,8 +221,6 @@ export class FaceFilterManager {
       opacity?: number
     },
   ): void {
-    if (!isBrowser) return
-
     this.activeFilter = filterType
     console.log(`Active filter set to: ${filterType}`)
 
@@ -215,9 +245,6 @@ export class FaceFilterManager {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
       }
     } else {
-      // Load the filter image if needed
-      this.loadFilterImage(filterType)
-
       // Start processing if not already
       if (!this.isProcessing) {
         this.startProcessing()
@@ -225,109 +252,9 @@ export class FaceFilterManager {
     }
   }
 
-  // Load a specific filter image on demand
-  private loadFilterImage(filterType: FilterType): void {
-    if (
-      !isBrowser ||
-      filterType === "none" ||
-      filterType === "rainbow" ||
-      filterType === "glitter" ||
-      filterType === "neon" ||
-      filterType === "pixelate"
-    ) {
-      return // These filters don't need images or are already loaded
-    }
-
-    // Check if we already have this image
-    if (this.filterImages[filterType] && this.filterImages[filterType].complete) {
-      return
-    }
-
-    // Create a placeholder image for now
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-
-    // Try to load the actual filter image
-    img.src = `/filters/${filterType}.png`
-
-    // Handle loading errors by using a colored rectangle as fallback
-    img.onerror = () => {
-      console.warn(`Failed to load filter image: ${filterType}`)
-
-      // Create a canvas to generate a placeholder image
-      const canvas = document.createElement("canvas")
-      canvas.width = 100
-      canvas.height = 100
-      const ctx = canvas.getContext("2d")
-
-      if (ctx) {
-        // Draw a colored rectangle based on filter type
-        switch (filterType) {
-          case "dog":
-            ctx.fillStyle = "#8B4513" // Brown
-            break
-          case "cat":
-            ctx.fillStyle = "#FFA500" // Orange
-            break
-          case "bunny":
-            ctx.fillStyle = "#FFB6C1" // Pink
-            break
-          case "glasses":
-            ctx.fillStyle = "#000000" // Black
-            break
-          case "hat":
-            ctx.fillStyle = "#00008B" // Dark blue
-            break
-          case "crown":
-            ctx.fillStyle = "#FFD700" // Gold
-            break
-          case "mustache":
-            ctx.fillStyle = "#000000" // Black
-            break
-          default:
-            ctx.fillStyle = "#FF0000" // Red
-        }
-
-        ctx.fillRect(0, 0, 100, 100)
-
-        // Use the canvas as the image source
-        img.src = canvas.toDataURL()
-      }
-    }
-
-    this.filterImages[filterType] = img
-  }
-
-  // Initialize with video and canvas elements
-  initialize(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
-    if (!isBrowser) return
-
-    this.video = video
-    this.canvas = canvas
-    this.ctx = canvas.getContext("2d")
-
-    // Set canvas dimensions to match video
-    this.updateCanvasDimensions()
-
-    console.log("Face filter manager initialized with advanced capabilities")
-  }
-
-  // Update canvas dimensions to match video
-  updateCanvasDimensions(): void {
-    if (!isBrowser || !this.video || !this.canvas) return
-
-    const { videoWidth, videoHeight } = this.video
-
-    if (videoWidth && videoHeight) {
-      this.canvas.width = videoWidth
-      this.canvas.height = videoHeight
-      console.log(`Canvas dimensions set to ${videoWidth}x${videoHeight}`)
-    }
-  }
-
   // Start face detection and filter application with advanced tracking
   async startProcessing(): Promise<void> {
-    if (!isBrowser || !this.video || !this.canvas || !this.ctx || this.isProcessing) return
+    if (!this.video || !this.canvas || !this.ctx || this.isProcessing) return
 
     // Ensure models are loaded
     if (!this.isModelLoaded) {
@@ -340,8 +267,6 @@ export class FaceFilterManager {
 
   // Stop processing
   stopProcessing(): void {
-    if (!isBrowser) return
-
     this.isProcessing = false
 
     if (this.animationFrame) {
@@ -352,7 +277,7 @@ export class FaceFilterManager {
 
   // Process video frame with advanced face tracking
   private processFrame = async (): Promise<void> => {
-    if (!isBrowser || !this.isProcessing || !this.video || !this.canvas || !this.ctx) {
+    if (!this.isProcessing || !this.video || !this.canvas || !this.ctx) {
       return
     }
 
@@ -425,34 +350,30 @@ export class FaceFilterManager {
 
   // Initialize performance monitoring
   private initPerformanceMonitoring(): void {
-    if (!isBrowser) return
-
     // Set up FPS counter
     this.lastFpsUpdateTime = performance.now()
   }
 
   // Extract facial features for advanced tracking
-  private extractFacialFeatures(landmarks: any): void {
-    if (!isBrowser) return
-
+  private extractFacialFeatures(landmarks: faceapi.FaceLandmarks68): void {
     const positions = landmarks.positions
 
     // Extract eyebrows
-    this.facialFeatures.eyebrows.left = positions.slice(17, 22).map((p: any) => [p.x, p.y])
-    this.facialFeatures.eyebrows.right = positions.slice(22, 27).map((p: any) => [p.x, p.y])
+    this.facialFeatures.eyebrows.left = positions.slice(17, 22).map((p) => [p.x, p.y])
+    this.facialFeatures.eyebrows.right = positions.slice(22, 27).map((p) => [p.x, p.y])
 
     // Extract eyes
-    this.facialFeatures.eyes.left = positions.slice(36, 42).map((p: any) => [p.x, p.y])
-    this.facialFeatures.eyes.right = positions.slice(42, 48).map((p: any) => [p.x, p.y])
+    this.facialFeatures.eyes.left = positions.slice(36, 42).map((p) => [p.x, p.y])
+    this.facialFeatures.eyes.right = positions.slice(42, 48).map((p) => [p.x, p.y])
 
     // Extract nose
-    this.facialFeatures.nose = positions.slice(27, 36).map((p: any) => [p.x, p.y])
+    this.facialFeatures.nose = positions.slice(27, 36).map((p) => [p.x, p.y])
 
     // Extract mouth
-    this.facialFeatures.mouth = positions.slice(48, 68).map((p: any) => [p.x, p.y])
+    this.facialFeatures.mouth = positions.slice(48, 68).map((p) => [p.x, p.y])
 
     // Extract jawline
-    this.facialFeatures.jawline = positions.slice(0, 17).map((p: any) => [p.x, p.y])
+    this.facialFeatures.jawline = positions.slice(0, 17).map((p) => [p.x, p.y])
 
     // Calculate eye openness
     const leftEyeTop = positions[37].y
@@ -489,7 +410,7 @@ export class FaceFilterManager {
 
   // Detect expressions like blinks, smiles, etc.
   private detectExpressions(): void {
-    if (!isBrowser || !this.faceExpressions) return
+    if (!this.faceExpressions) return
 
     const now = performance.now()
 
@@ -579,8 +500,6 @@ export class FaceFilterManager {
 
   // Update animation phase for animated filters
   private updateAnimationPhase(): void {
-    if (!isBrowser) return
-
     const now = performance.now()
     const deltaTime = now - this.filterLastUpdateTime
 
@@ -596,7 +515,7 @@ export class FaceFilterManager {
 
   // Apply the selected filter to detected faces
   private applyFilter(): void {
-    if (!isBrowser || !this.ctx || this.activeFilter === "none") return
+    if (!this.ctx || this.activeFilter === "none") return
 
     // Update animation phase for animated filters
     this.updateAnimationPhase()
@@ -608,17 +527,37 @@ export class FaceFilterManager {
       // Apply the appropriate filter based on the active filter type
       switch (this.activeFilter) {
         case "dog":
+          this.applyDogFilter(landmarks, box)
+          break
         case "cat":
+          this.applyCatFilter(landmarks, box)
+          break
         case "bunny":
+          this.applyBunnyFilter(landmarks, box)
+          break
         case "glasses":
+          this.applyGlassesFilter(landmarks, box)
+          break
         case "hat":
+          this.applyHatFilter(landmarks, box)
+          break
         case "crown":
+          this.applyCrownFilter(landmarks, box)
+          break
         case "mustache":
+          this.applyMustacheFilter(landmarks, box)
+          break
         case "alien":
+          this.applyAlienFilter(landmarks, box)
+          break
         case "zombie":
+          this.applyZombieFilter(landmarks, box)
+          break
         case "heart":
+          this.applyHeartFilter(landmarks, box)
+          break
         case "fire":
-          this.applyImageFilter(this.activeFilter, landmarks, box)
+          this.applyFireFilter(landmarks, box)
           break
         case "rainbow":
           this.applyRainbowFilter(landmarks, box)
@@ -637,12 +576,12 @@ export class FaceFilterManager {
     }
   }
 
-  // Apply image-based filter (dog, cat, glasses, etc.)
-  private applyImageFilter(filterType: FilterType, landmarks: any, box: any): void {
-    if (!isBrowser || !this.ctx) return
+  // Apply dog filter
+  private applyDogFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
 
-    const img = this.filterImages[filterType]
-    if (!img || !img.complete) return
+    const img = this.filterImages["dog"]
+    if (!img.complete) return
 
     const positions = landmarks.positions
 
@@ -656,34 +595,12 @@ export class FaceFilterManager {
     const faceWidth = box.width
     const scale = (faceWidth / img.width) * 1.5 * this.filterScale
 
-    // Draw filter
+    // Draw dog filter (ears, nose, etc.)
     this.ctx.save()
 
-    // Position based on filter type
-    let centerX, centerY
-
-    switch (filterType) {
-      case "glasses":
-        // Position at center between eyes
-        centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
-        centerY = (leftEye.y + rightEye.y) / 2 + this.filterOffset.y
-        break
-      case "mustache":
-        // Position between nose and mouth
-        centerX = nose.x + this.filterOffset.x
-        centerY = nose.y + (mouth.y - nose.y) * 0.4 + this.filterOffset.y
-        break
-      case "hat":
-      case "crown":
-        // Position at top of head
-        centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
-        centerY = leftEye.y - faceWidth * 0.6 + this.filterOffset.y
-        break
-      default:
-        // Default position at center of face, slightly above
-        centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
-        centerY = leftEye.y - faceWidth * 0.3 + this.filterOffset.y
-    }
+    // Position at center of face, slightly above
+    const centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
+    const centerY = leftEye.y - faceWidth * 0.3 + this.filterOffset.y
 
     this.ctx.translate(centerX, centerY)
     this.ctx.rotate(this.filterRotation + this.headPose.roll)
@@ -692,11 +609,455 @@ export class FaceFilterManager {
     this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
 
     this.ctx.restore()
+
+    // Add animated tongue if mouth is open
+    if (this.mouthOpenness > 20) {
+      this.ctx.save()
+
+      const tongueX = mouth.x
+      const tongueY = mouth.y + 10
+
+      // Make tongue move up and down
+      const tongueOffset = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 5
+
+      this.ctx.translate(tongueX, tongueY)
+      this.ctx.beginPath()
+      this.ctx.moveTo(-10, 0)
+      this.ctx.quadraticCurveTo(0, 20 + tongueOffset, 10, 0)
+      this.ctx.fillStyle = "#ff7777"
+      this.ctx.fill()
+
+      this.ctx.restore()
+    }
+  }
+
+  // Apply cat filter
+  private applyCatFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["cat"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+
+    // Draw cat filter
+    this.ctx.save()
+
+    // Position at center of face, slightly above
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.2 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.filterRotation + this.headPose.roll)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+
+    // Add whiskers that move with facial expressions
+    this.ctx.save()
+
+    const noseX = positions[30].x
+    const noseY = positions[30].y
+    const whiskerLength = faceWidth * 0.2
+
+    // Whisker movement based on smile
+    const whiskerAngleOffset = this.smileDetection ? 0.2 : 0
+
+    // Left whiskers
+    for (let i = 0; i < 3; i++) {
+      const angle = Math.PI * 0.75 - i * 0.15 + whiskerAngleOffset
+      const startX = noseX - 5
+      const startY = noseY + i * 3
+      const endX = startX - Math.cos(angle) * whiskerLength
+      const endY = startY - Math.sin(angle) * whiskerLength
+
+      this.ctx.beginPath()
+      this.ctx.moveTo(startX, startY)
+      this.ctx.lineTo(endX, endY)
+      this.ctx.strokeStyle = "black"
+      this.ctx.lineWidth = 2
+      this.ctx.stroke()
+    }
+
+    // Right whiskers
+    for (let i = 0; i < 3; i++) {
+      const angle = Math.PI * 0.25 + i * 0.15 - whiskerAngleOffset
+      const startX = noseX + 5
+      const startY = noseY + i * 3
+      const endX = startX + Math.cos(angle) * whiskerLength
+      const endY = startY - Math.sin(angle) * whiskerLength
+
+      this.ctx.beginPath()
+      this.ctx.moveTo(startX, startY)
+      this.ctx.lineTo(endX, endY)
+      this.ctx.strokeStyle = "black"
+      this.ctx.lineWidth = 2
+      this.ctx.stroke()
+    }
+
+    this.ctx.restore()
+  }
+
+  // Apply bunny filter
+  private applyBunnyFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["bunny"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.8 * this.filterScale
+
+    // Draw bunny filter
+    this.ctx.save()
+
+    // Position at top of head
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.filterRotation + this.headPose.roll)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+
+    // Add animated bunny nose
+    this.ctx.save()
+
+    const noseX = positions[30].x
+    const noseY = positions[30].y
+
+    // Make nose twitch
+    const twitchOffset = Math.sin(this.filterAnimationPhase * Math.PI * 10) * 2
+
+    this.ctx.translate(noseX + twitchOffset, noseY)
+    this.ctx.beginPath()
+    this.ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2)
+    this.ctx.fillStyle = "#ffaaaa"
+    this.ctx.fill()
+
+    this.ctx.restore()
+  }
+
+  // Apply glasses filter
+  private applyGlassesFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["glasses"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Get eye positions
+    const leftEye = positions[36]
+    const rightEye = positions[45]
+
+    // Calculate angle between eyes
+    const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
+
+    // Calculate distance between eyes and scale
+    const eyeDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2))
+    const scale = (eyeDistance / (img.width * 0.5)) * this.filterScale
+
+    // Draw glasses
+    this.ctx.save()
+
+    // Position at center between eyes
+    const centerX = (leftEye.x + rightEye.x) / 2 + this.filterOffset.x
+    const centerY = (leftEye.y + rightEye.y) / 2 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(angle + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+  }
+
+  // Apply hat filter
+  private applyHatFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["hat"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.2 * this.filterScale
+
+    // Draw hat
+    this.ctx.save()
+
+    // Position at top of head
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.6 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+  }
+
+  // Apply crown filter
+  private applyCrownFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["crown"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.2 * this.filterScale
+
+    // Draw crown
+    this.ctx.save()
+
+    // Position at top of head
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.7 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+
+    // Add sparkling effect to crown
+    this.ctx.save()
+
+    // Generate sparkles
+    for (let i = 0; i < 5; i++) {
+      const sparkleX = centerX + (Math.random() - 0.5) * faceWidth * 0.8
+      const sparkleY = centerY + (Math.random() - 0.5) * faceWidth * 0.3
+      const sparkleSize = 2 + Math.random() * 4
+
+      // Sparkle animation
+      const sparkleOpacity = Math.sin((this.filterAnimationPhase + i * 0.2) * Math.PI * 2) * 0.5 + 0.5
+
+      // Draw sparkle
+      this.ctx.beginPath()
+      this.ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2)
+      this.ctx.fillStyle = `rgba(255, 255, 100, ${sparkleOpacity})`
+      this.ctx.fill()
+    }
+
+    this.ctx.restore()
+  }
+
+  // Apply mustache filter
+  private applyMustacheFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["mustache"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Get nose and mouth positions
+    const nose = positions[33]
+    const mouth = positions[57]
+
+    // Calculate position between nose and mouth
+    const centerX = nose.x + this.filterOffset.x
+    const centerY = nose.y + (mouth.y - nose.y) * 0.4 + this.filterOffset.y
+
+    // Calculate scale based on face width
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 0.6 * this.filterScale
+
+    // Draw mustache
+    this.ctx.save()
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+    this.ctx.restore()
+  }
+
+  // Apply alien filter
+  private applyAlienFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["alien"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.8 * this.filterScale
+
+    // Draw alien filter
+    this.ctx.save()
+
+    // Position at center of face, slightly above
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.3 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+
+    // Add glowing eyes
+    this.ctx.save()
+
+    const leftEyeX = positions[37].x
+    const leftEyeY = positions[37].y
+    const rightEyeX = positions[44].x
+    const rightEyeY = positions[44].y
+
+    // Pulsating glow
+    const glowIntensity = Math.sin(this.filterAnimationPhase * Math.PI * 2) * 0.3 + 0.7
+    const glowSize = 5 + glowIntensity * 5
+
+    // Create radial gradient for glow
+    const leftGlow = this.ctx.createRadialGradient(leftEyeX, leftEyeY, 0, leftEyeX, leftEyeY, glowSize)
+    leftGlow.addColorStop(0, `rgba(0, 255, 0, ${glowIntensity})`)
+    leftGlow.addColorStop(1, "rgba(0, 255, 0, 0)")
+
+    const rightGlow = this.ctx.createRadialGradient(rightEyeX, rightEyeY, 0, rightEyeX, rightEyeY, glowSize)
+    rightGlow.addColorStop(0, `rgba(0, 255, 0, ${glowIntensity})`)
+    rightGlow.addColorStop(1, "rgba(0, 255, 0, 0)")
+
+    // Draw glowing eyes
+    this.ctx.beginPath()
+    this.ctx.arc(leftEyeX, leftEyeY, glowSize, 0, Math.PI * 2)
+    this.ctx.fillStyle = leftGlow
+    this.ctx.fill()
+
+    this.ctx.beginPath()
+    this.ctx.arc(rightEyeX, rightEyeY, glowSize, 0, Math.PI * 2)
+    this.ctx.fillStyle = rightGlow
+    this.ctx.fill()
+
+    this.ctx.restore()
+  }
+
+  // Apply zombie filter
+  private applyZombieFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["zombie"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+
+    // Draw zombie filter
+    this.ctx.save()
+
+    // Position at center of face
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = (positions[36].y + positions[57].y) / 2 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+  }
+
+  // Apply heart filter
+  private applyHeartFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["heart"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Get eye positions
+    const leftEye = positions[37]
+    const rightEye = positions[44]
+
+    // Calculate scale based on face width
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 0.5 * this.filterScale
+
+    // Draw hearts over eyes
+    this.ctx.save()
+
+    // Left eye
+    this.ctx.translate(leftEye.x + this.filterOffset.x, leftEye.y + this.filterOffset.y)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    // Right eye
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0) // Reset transform
+    this.ctx.translate(rightEye.x + this.filterOffset.x, rightEye.y + this.filterOffset.y)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
+  }
+
+  // Apply fire filter
+  private applyFireFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const img = this.filterImages["fire"]
+    if (!img.complete) return
+
+    const positions = landmarks.positions
+
+    // Calculate face width and position
+    const faceWidth = box.width
+    const scale = (faceWidth / img.width) * 1.5 * this.filterScale
+
+    // Draw fire on top of head
+    this.ctx.save()
+
+    // Position at top of head
+    const centerX = (positions[36].x + positions[45].x) / 2 + this.filterOffset.x
+    const centerY = positions[36].y - faceWidth * 0.5 + this.filterOffset.y
+
+    this.ctx.translate(centerX, centerY)
+    this.ctx.rotate(this.headPose.roll + this.filterRotation)
+    this.ctx.scale(scale, scale)
+    this.ctx.globalAlpha = this.filterOpacity
+    this.ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    this.ctx.restore()
   }
 
   // Apply rainbow filter
-  private applyRainbowFilter(landmarks: any, box: any): void {
-    if (!isBrowser || !this.ctx) return
+  private applyRainbowFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
 
     const positions = landmarks.positions
 
@@ -748,8 +1109,10 @@ export class FaceFilterManager {
   }
 
   // Apply glitter filter
-  private applyGlitterFilter(landmarks: any, box: any): void {
-    if (!isBrowser || !this.ctx) return
+  private applyGlitterFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
+
+    const positions = landmarks.positions
 
     // Calculate face dimensions
     const faceWidth = box.width
@@ -785,8 +1148,8 @@ export class FaceFilterManager {
   }
 
   // Apply neon filter
-  private applyNeonFilter(landmarks: any, box: any): void {
-    if (!isBrowser || !this.ctx) return
+  private applyNeonFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx) return
 
     const positions = landmarks.positions
 
@@ -832,8 +1195,8 @@ export class FaceFilterManager {
   }
 
   // Apply pixelate filter
-  private applyPixelateFilter(landmarks: any, box: any): void {
-    if (!isBrowser || !this.ctx || !this.canvas || !this.video) return
+  private applyPixelateFilter(landmarks: faceapi.FaceLandmarks68, box: faceapi.Box): void {
+    if (!this.ctx || !this.canvas || !this.video) return
 
     // Get face region
     const faceLeft = Math.max(0, box.x)
@@ -877,8 +1240,6 @@ export class FaceFilterManager {
 
   // Clean up resources
   dispose(): void {
-    if (!isBrowser) return
-
     this.stopProcessing()
     this.canvas = null
     this.ctx = null

@@ -1,17 +1,11 @@
-import type { Metadata } from "next"
-import AdminDashboard from "./admin-dashboard"
+import AdminDashboard from "./components/AdminDashboard"
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Admin Dashboard - Random Video Chat",
-  description: "Admin dashboard for moderating Random Video Chat",
+  description: "Admin dashboard for the random video chat application",
 }
 
-export default function AdminPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-      <AdminDashboard />
-    </div>
-  )
+export default function AdminDashboardPage() {
+  return <AdminDashboard />
 }
 

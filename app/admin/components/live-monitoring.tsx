@@ -3,28 +3,12 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
-interface ChatSession {
-  _id: string
-  participants: string[]
-  startTime: string
-  isActive: boolean
-}
-
-interface User {
-  _id: string
-  username: string
-  isOnline: boolean
-}
-
 export default function LiveMonitoring() {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [onlineUsers, setOnlineUsers] = useState<User[]>([])
-  const [selectedSession, setSelectedSession] = useState<string | null>(null)
-  const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const [onlineUsers, setOnlineUsers] = useState([])
+  const [selectedUser, setSelectedUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = useRef(null)
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -35,7 +19,7 @@ export default function LiveMonitoring() {
       setSelectedUser(userId)
     }
 
-    const fetchData = async () => {
+    const fetchOnlineUsers = async () => {
       try {
         const token = localStorage.getItem("adminToken")
         if (!token) {
@@ -43,94 +27,51 @@ export default function LiveMonitoring() {
           return
         }
 
-        // Fetch active chat sessions
-        const sessionsRes = await fetch("/api/admin/chats/active", {
+        const response = await fetch("/api/admin/users?status=online", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
 
-        if (!sessionsRes.ok) {
-          throw new Error("Failed to fetch active sessions")
-        }
-
-        const sessionsData = await sessionsRes.json()
-
-        // Fetch online users
-        const usersRes = await fetch("/api/admin/users/online", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (!usersRes.ok) {
+        if (!response.ok) {
           throw new Error("Failed to fetch online users")
         }
 
-        const usersData = await usersRes.json()
-
-        setSessions(sessionsData.chats)
-        setOnlineUsers(usersData.users)
-      } catch (err: any) {
-        setError(err.message || "Failed to load monitoring data")
+        const data = await response.json()
+        setOnlineUsers(data.users)
+      } catch (err) {
+        setError(err.message || "Failed to load online users")
         console.error(err)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchData()
+    fetchOnlineUsers()
 
     // Set up polling for real-time updates
-    const interval = setInterval(fetchData, 10000) // Update every 10 seconds
+    const interval = setInterval(fetchOnlineUsers, 10000) // Update every 10 seconds
 
     return () => clearInterval(interval)
   }, [router, searchParams])
 
   // Function to connect to a user's camera
-  const connectToUserCamera = async (userId: string) => {
+  const connectToUserCamera = (userId) => {
     setSelectedUser(userId)
-    setSelectedSession(null)
 
     // In a real implementation, you would:
     // 1. Set up a WebRTC connection to the user's camera
-    // 2. Display the stream in the localVideoRef
+    // 2. Display the stream in the videoRef
 
     // For demo purposes, we'll just show a placeholder
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null
-      localVideoRef.current.poster = `/placeholder.svg?height=480&width=640&text=Connecting to user ${userId}...`
-    }
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null
-      remoteVideoRef.current.poster = "/placeholder.svg?height=480&width=640&text=No remote stream"
-    }
-  }
-
-  // Function to monitor a chat session
-  const monitorChatSession = async (sessionId: string) => {
-    setSelectedSession(sessionId)
-    setSelectedUser(null)
-
-    // In a real implementation, you would:
-    // 1. Set up WebRTC connections to both participants
-    // 2. Display the streams in the localVideoRef and remoteVideoRef
-
-    // For demo purposes, we'll just show placeholders
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null
-      localVideoRef.current.poster = `/placeholder.svg?height=480&width=640&text=Participant 1 in session ${sessionId}`
-    }
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null
-      remoteVideoRef.current.poster = `/placeholder.svg?height=480&width=640&text=Participant 2 in session ${sessionId}`
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+      videoRef.current.poster = `/placeholder.svg?height=480&width=640&text=Connecting to user ${userId}...`
     }
   }
 
   // Function to ban a user
-  const banUser = (userId: string) => {
+  const banUser = (userId) => {
     router.push(`/admin/users?action=ban&userId=${userId}`)
   }
 
@@ -169,7 +110,7 @@ export default function LiveMonitoring() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
-                      <span>{user.username}</span>
+                      <span>{user.username || "Anonymous"}</span>
                     </div>
                     <button
                       onClick={(e) => {
@@ -188,96 +129,40 @@ export default function LiveMonitoring() {
             )}
           </div>
         </div>
-
-        <div className="bg-white shadow rounded-lg p-4">
-          <h3 className="font-medium text-lg mb-4">Active Chat Sessions</h3>
-          <div className="space-y-2 max-h-80 overflow-y-auto">
-            {sessions.length > 0 ? (
-              sessions.map((session) => (
-                <div
-                  key={session._id}
-                  className={`p-3 rounded-md cursor-pointer ${
-                    selectedSession === session._id ? "bg-indigo-100" : "hover:bg-gray-100"
-                  }`}
-                  onClick={() => monitorChatSession(session._id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm font-medium">Session #{session._id.slice(-6)}</span>
-                      <p className="text-xs text-gray-500">
-                        Started: {new Date(session.startTime).toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">No active sessions</p>
-            )}
-          </div>
-        </div>
       </div>
 
       <div className="lg:col-span-3 space-y-4">
         <div className="bg-white shadow rounded-lg p-4">
           <h3 className="font-medium text-lg mb-4">
-            {selectedUser
-              ? `Monitoring User Camera`
-              : selectedSession
-                ? `Monitoring Chat Session`
-                : `Select a user or session to monitor`}
+            {selectedUser ? `Monitoring User Camera` : `Select a user to monitor`}
           </h3>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                poster="/placeholder.svg?height=480&width=640&text=Select a user or session"
-                className="w-full h-auto bg-gray-100 rounded"
-              ></video>
-              <p className="mt-2 text-sm text-gray-600">
-                {selectedUser ? `User Camera` : selectedSession ? `Participant 1` : `No stream selected`}
-              </p>
-            </div>
-
-            {selectedSession && (
-              <div>
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  poster="/placeholder.svg?height=480&width=640&text=Remote stream"
-                  className="w-full h-auto bg-gray-100 rounded"
-                ></video>
-                <p className="mt-2 text-sm text-gray-600">Participant 2</p>
-              </div>
-            )}
+          <div>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              poster="/placeholder.svg?height=480&width=640&text=Select a user to monitor"
+              className="w-full h-auto bg-gray-100 rounded"
+            ></video>
+            <p className="mt-2 text-sm text-gray-600">{selectedUser ? `User Camera` : `No user selected`}</p>
           </div>
 
-          {(selectedUser || selectedSession) && (
+          {selectedUser && (
             <div className="mt-4 flex justify-end space-x-4">
-              {selectedUser && (
-                <button
-                  onClick={() => banUser(selectedUser)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                >
-                  Ban User
-                </button>
-              )}
+              <button
+                onClick={() => banUser(selectedUser)}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Ban User
+              </button>
               <button
                 onClick={() => {
                   setSelectedUser(null)
-                  setSelectedSession(null)
-                  if (localVideoRef.current) {
-                    localVideoRef.current.srcObject = null
-                  }
-                  if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = null
+                  if (videoRef.current) {
+                    videoRef.current.srcObject = null
+                    videoRef.current.poster = "/placeholder.svg?height=480&width=640&text=Select a user to monitor"
                   }
                 }}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"

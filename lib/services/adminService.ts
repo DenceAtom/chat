@@ -1,13 +1,25 @@
+import { connectToDatabase } from "../database/mongodb"
 import { ObjectId } from "mongodb"
-import { connectToDatabase } from "../mongodb"
-import type { Admin } from "../models/admin"
 import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
 
+// Admin user interface
+export interface Admin {
+  _id: string
+  email: string
+  name: string
+  role: "admin" | "moderator"
+  passwordHash: string
+  lastLogin?: Date
+}
+
+// Get admin by email
 export async function getAdminByEmail(email: string): Promise<Admin | null> {
   const { db } = await connectToDatabase()
   return db.collection("admins").findOne({ email }) as Promise<Admin | null>
 }
 
+// Verify admin credentials
 export async function verifyAdminCredentials(email: string, password: string): Promise<Admin | null> {
   const admin = await getAdminByEmail(email)
   if (!admin) return null
@@ -17,12 +29,45 @@ export async function verifyAdminCredentials(email: string, password: string): P
 
   // Update last login
   const { db } = await connectToDatabase()
-  await db.collection("admins").updateOne({ _id: admin._id }, { $set: { lastLogin: new Date() } })
+  await db.collection("admins").updateOne({ _id: new ObjectId(admin._id) }, { $set: { lastLogin: new Date() } })
 
   return admin
 }
 
-export async function getAllOnlineUsers() {
+// Generate JWT token for admin
+export function generateAdminToken(admin: Admin): string {
+  const JWT_SECRET = process.env.JWT_SECRET || "admin-secret-key"
+
+  return jwt.sign(
+    {
+      id: admin._id,
+      email: admin.email,
+      role: admin.role,
+    },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  )
+}
+
+// Verify admin token from request
+export function verifyAdminToken(token: string): { id: string; email: string; role: string } | null {
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET || "admin-secret-key"
+    const decoded = jwt.verify(token, JWT_SECRET) as any
+
+    return {
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
+    }
+  } catch (error) {
+    console.error("Admin token verification error:", error)
+    return null
+  }
+}
+
+// Get all online users
+export async function getOnlineUsers() {
   const { db } = await connectToDatabase()
   return db
     .collection("users")
@@ -33,37 +78,28 @@ export async function getAllOnlineUsers() {
     .toArray()
 }
 
+// Get all active chats
 export async function getActiveChats() {
   const { db } = await connectToDatabase()
   return db
-    .collection("activeSessions")
+    .collection("chats")
     .find({
-      endTime: null, // Sessions that haven't ended
+      status: "active",
     })
     .toArray()
 }
 
-export async function banUser(userId: string, adminId: string, reason: string, duration?: number) {
+// Ban a user
+export async function banUser(userId: string, reason: string) {
   const { db } = await connectToDatabase()
 
-  // Create ban record
-  await db.collection("moderatorActions").insertOne({
-    adminId: new ObjectId(adminId),
-    userId: new ObjectId(userId),
-    action: "ban",
-    reason,
-    timestamp: new Date(),
-    duration,
-  })
-
-  // Update user status
   await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
     {
       $set: {
         isBanned: true,
         banReason: reason,
-        banExpiration: duration ? new Date(Date.now() + duration) : null,
+        banDate: new Date(),
       },
     },
   )
@@ -71,26 +107,17 @@ export async function banUser(userId: string, adminId: string, reason: string, d
   return { success: true }
 }
 
-export async function unbanUser(userId: string, adminId: string, reason: string) {
+// Unban a user
+export async function unbanUser(userId: string) {
   const { db } = await connectToDatabase()
 
-  // Create unban record
-  await db.collection("moderatorActions").insertOne({
-    adminId: new ObjectId(adminId),
-    userId: new ObjectId(userId),
-    action: "unban",
-    reason,
-    timestamp: new Date(),
-  })
-
-  // Update user status
   await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
     {
       $set: {
         isBanned: false,
         banReason: null,
-        banExpiration: null,
+        banDate: null,
       },
     },
   )
@@ -98,44 +125,26 @@ export async function unbanUser(userId: string, adminId: string, reason: string)
   return { success: true }
 }
 
-export async function startMonitoringSession(adminId: string, targetData: { userId?: string; sessionId?: string }) {
+// Initialize admin user if none exists
+export async function initializeAdminUser() {
   const { db } = await connectToDatabase()
 
-  const session = {
-    adminId: new ObjectId(adminId),
-    targetUserId: targetData.userId ? new ObjectId(targetData.userId) : undefined,
-    targetSessionId: targetData.sessionId,
-    startTime: new Date(),
-    notes: "",
+  // Check if admin exists
+  const adminExists = await db.collection("admins").findOne({})
+
+  if (!adminExists) {
+    // Create default admin
+    const passwordHash = await bcrypt.hash("admin123", 10)
+
+    await db.collection("admins").insertOne({
+      email: "admin@example.com",
+      name: "Admin",
+      role: "admin",
+      passwordHash,
+      createdAt: new Date(),
+    })
+
+    console.log("Default admin user created")
   }
-
-  const result = await db.collection("monitoringSessions").insertOne(session)
-  return { ...session, _id: result.insertedId }
-}
-
-export async function endMonitoringSession(sessionId: string, notes?: string) {
-  const { db } = await connectToDatabase()
-
-  await db.collection("monitoringSessions").updateOne(
-    { _id: new ObjectId(sessionId) },
-    {
-      $set: {
-        endTime: new Date(),
-        notes: notes || "",
-      },
-    },
-  )
-
-  return { success: true }
-}
-
-export async function getModeratorActionHistory(userId?: string, adminId?: string, limit = 100) {
-  const { db } = await connectToDatabase()
-
-  const query: any = {}
-  if (userId) query.userId = new ObjectId(userId)
-  if (adminId) query.adminId = new ObjectId(adminId)
-
-  return db.collection("moderatorActions").find(query).sort({ timestamp: -1 }).limit(limit).toArray()
 }
 

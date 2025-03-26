@@ -36,9 +36,7 @@ export default function UserManagement() {
           return
         }
 
-        // In a real app, you'd have a paginated API for all users
-        // For now, we'll just use the online users API
-        const response = await fetch("/api/admin/users/online", {
+        const response = await fetch("/api/admin/users", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -60,12 +58,7 @@ export default function UserManagement() {
     }
 
     fetchUsers()
-
-    // Set up polling for real-time updates
-    const interval = setInterval(fetchUsers, 30000) // Update every 30 seconds
-
-    return () => clearInterval(interval)
-  }, [router])
+  }, [router, searchTerm, filter])
 
   const applyFilters = (userList: User[], search: string, filterType: string) => {
     let filtered = [...userList]
@@ -74,8 +67,8 @@ export default function UserManagement() {
     if (search) {
       filtered = filtered.filter(
         (user) =>
-          user.username.toLowerCase().includes(search.toLowerCase()) ||
-          user.email.toLowerCase().includes(search.toLowerCase()),
+          user.username?.toLowerCase().includes(search.toLowerCase()) ||
+          user.email?.toLowerCase().includes(search.toLowerCase()),
       )
     }
 
@@ -121,7 +114,7 @@ export default function UserManagement() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId, reason: "Unbanned by admin" }),
+        body: JSON.stringify({ userId }),
       })
 
       if (!response.ok) {
@@ -262,8 +255,8 @@ export default function UserManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{user.username}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                        <div className="text-sm font-medium text-gray-900">{user.username || "Anonymous"}</div>
+                        <div className="text-sm text-gray-500">{user.email || "No email"}</div>
                       </div>
                     </div>
                   </td>
@@ -281,7 +274,7 @@ export default function UserManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(user.lastActive).toLocaleString()}
+                    {user.lastActive ? new Date(user.lastActive).toLocaleString() : "Never"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
@@ -317,7 +310,7 @@ export default function UserManagement() {
       {showBanModal && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4">Ban User: {selectedUser.username}</h3>
+            <h3 className="text-lg font-medium mb-4">Ban User: {selectedUser.username || "Anonymous"}</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Reason for ban</label>
               <textarea
